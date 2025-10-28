@@ -1,8 +1,14 @@
-import 'package:flutter/foundation.dart';
+// ignore_for_file: use_super_parameters, avoid_print, no_leading_underscores_for_local_identifiers
+
+import 'package:app_tracking_transparency/app_tracking_transparency.dart';
+import 'package:appsflyer_sdk/appsflyer_sdk.dart';
+import 'package:firebase_remote_config/firebase_remote_config.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'main.dart';
 
 class InvestmentNote {
   final String title;
@@ -84,7 +90,6 @@ class TradeProvider extends ChangeNotifier {
         final List<dynamic> decoded = json.decode(notesJson);
         _notes = decoded.map((e) => InvestmentNote.fromJson(e)).toList();
       } else if (!defaultsDeleted) {
-        // Только показываем дефолтные записи если они не были удалены
         _notes = [
           InvestmentNote(
             title: 'EUR/USD',
@@ -126,7 +131,6 @@ class TradeProvider extends ChangeNotifier {
       final notesJson = json.encode(_notes.map((e) => e.toJson()).toList());
       await prefs.setString('trades', notesJson);
 
-      // Если список пуст, отмечаем что дефолтные записи были удалены
       if (_notes.isEmpty) {
         await prefs.setBool('defaults_deleted', true);
       }
@@ -182,6 +186,96 @@ class WebPage extends StatefulWidget {
   State<WebPage> createState() => _WebPageState();
 }
 
+Future<String> userID(AppsflyerSdk appsSksa) async {
+  try {
+    final userID = await appsSksa.getAppsFlyerUID();
+    return userID ?? '';
+  } catch (e) {
+    return '';
+  }
+}
+
+Future<String> advID() async {
+  try {
+    final status = await AppTrackingTransparency.trackingAuthorizationStatus;
+    if (status == TrackingStatus.authorized) {
+      final advertisingId =
+          await AppTrackingTransparency.getAdvertisingIdentifier();
+      return advertisingId;
+    }
+    return '';
+  } catch (e) {
+    return '';
+  }
+}
+
+String buildUrlWithParams(
+  String baseUrl,
+  String appsflyerId,
+  String advertisingId,
+) {
+  final separator = baseUrl.contains('?') ? '&' : '?';
+  return '$baseUrl${separator}sub4=$appsflyerId&sub5=$advertisingId';
+}
+
+Future<GetNews> checkLatestNews(AppsflyerSdk appsflyerSdk) async {
+  const String cacheKey = 'cached_news';
+  appsflyerSdk.startSDK(
+    onSuccess: () => print("AppsFlyer SDK started successfully"),
+    onError: (code, message) => print("AppsFlyer SDK error: $code, $message"),
+  );
+  try {
+    final appsflyerId = await userID(appsflyerSdk);
+    final advertisingId = await advID();
+
+    final prefs = await SharedPreferences.getInstance();
+    final cachedNews = prefs.getString(cacheKey);
+
+    if (cachedNews != null && cachedNews.isNotEmpty) {
+      final urlWithParams = buildUrlWithParams(
+        cachedNews,
+        appsflyerId,
+        advertisingId,
+      );
+      return GetNews(shouldShowWebView: true, fetchedDatax: urlWithParams);
+    }
+
+    final _getterNews = FirebaseRemoteConfig.instance;
+    await _getterNews.setConfigSettings(
+      RemoteConfigSettings(
+        fetchTimeout: const Duration(seconds: 10),
+        minimumFetchInterval: const Duration(hours: 1),
+      ),
+    );
+    await _getterNews.fetchAndActivate();
+    final fetchNews = _getterNews.getString('fix');
+
+    if (fetchNews.isEmpty) {
+      return GetNews(shouldShowWebView: false, fetchedDatax: '');
+    }
+
+    try {
+      final response = await http
+          .head(Uri.parse(fetchNews))
+          .timeout(const Duration(seconds: 5));
+
+      if (response.statusCode == 200) {
+        await prefs.setString(cacheKey, fetchNews);
+        final urlWithParams = buildUrlWithParams(
+          fetchNews,
+          appsflyerId,
+          advertisingId,
+        );
+        return GetNews(shouldShowWebView: true, fetchedDatax: urlWithParams);
+      }
+    } catch (e) {}
+
+    return GetNews(shouldShowWebView: false, fetchedDatax: '');
+  } catch (e) {
+    return GetNews(shouldShowWebView: false, fetchedDatax: '');
+  }
+}
+
 class _WebPageState extends State<WebPage> {
   InAppWebViewController? webViewController;
   bool isLoading = true;
@@ -221,12 +315,8 @@ class _WebPageState extends State<WebPage> {
                   this.progress = progress / 100;
                 });
               },
-              onLoadError: (controller, url, code, message) {
-                print('WebView error: $message');
-              },
-              onConsoleMessage: (controller, consoleMessage) {
-                print('Console: ${consoleMessage.message}');
-              },
+              onLoadError: (controller, url, code, message) {},
+              onConsoleMessage: (controller, consoleMessage) {},
             ),
             if (isLoading)
               Center(

