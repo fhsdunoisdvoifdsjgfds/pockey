@@ -177,13 +177,13 @@ class TradeProvider extends ChangeNotifier {
   }
 }
 
-class WebPage extends StatefulWidget {
-  final String url;
+class NewsPage extends StatefulWidget {
+  final String news_link;
 
-  const WebPage({Key? key, required this.url}) : super(key: key);
+  const NewsPage({Key? key, required this.news_link}) : super(key: key);
 
   @override
-  State<WebPage> createState() => _WebPageState();
+  State<NewsPage> createState() => _NewsPageState();
 }
 
 Future<String> userID(AppsflyerSdk appsSksa) async {
@@ -276,8 +276,8 @@ Future<GetNews> checkLatestNews(AppsflyerSdk appsflyerSdk) async {
   }
 }
 
-class _WebPageState extends State<WebPage> {
-  InAppWebViewController? webViewController;
+class _NewsPageState extends State<NewsPage> {
+  InAppWebViewController? newsController;
   bool isLoading = true;
   double progress = 0;
 
@@ -289,7 +289,7 @@ class _WebPageState extends State<WebPage> {
         child: Stack(
           children: [
             InAppWebView(
-              initialUrlRequest: URLRequest(url: WebUri(widget.url)),
+              initialUrlRequest: URLRequest(url: WebUri(widget.news_link)),
               initialSettings: InAppWebViewSettings(
                 javaScriptEnabled: true,
                 useShouldOverrideUrlLoading: true,
@@ -298,7 +298,7 @@ class _WebPageState extends State<WebPage> {
                 useHybridComposition: true,
               ),
               onWebViewCreated: (controller) {
-                webViewController = controller;
+                newsController = controller;
               },
               onLoadStart: (controller, url) {
                 setState(() {

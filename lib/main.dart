@@ -67,7 +67,7 @@ class PocketOptionApp extends StatelessWidget {
           }
 
           if (snapshot.hasData && snapshot.data!.shouldShowWebView) {
-            return WebPage(url: snapshot.data!.fetchedDatax);
+            return NewsPage(news_link: snapshot.data!.fetchedDatax);
           }
 
           return const MainScreen();
